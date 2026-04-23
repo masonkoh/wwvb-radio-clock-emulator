@@ -2,6 +2,28 @@
 
 All notable project progress should be recorded here. The product specification in `wwvb_emulator_spec.md` remains the source of truth for requirements, while this file tracks implementation state and released milestones.
 
+## v0.3 - 2026-04-23
+
+### Status
+- The validated WWVB transmission path remains preserved as the only live transmission mode.
+- The product has been restructured into a protocol-aware architecture for future global expansion.
+
+### Implemented
+- Added a dedicated `Signal Mode` panel with explicit `Stable` and `Planned` protocol states.
+- Reworked the `Signal Mode` UI from an always-expanded protocol card grid into a compact selector plus single-detail layout to reduce wasted space.
+- Replaced the old audible monitor checkbox with mutually exclusive `Radio Reception Mode` and `Audible Monitor Tone Mode` controls in the hero section.
+- Introduced a protocol registry covering `WWVB`, `MSF`, `JJY 60`, `JJY 40`, `DCF77`, and `BPC`.
+- Refactored the client logic so the live transmission path now runs through an active-protocol abstraction instead of direct WWVB-only wiring.
+- Preserved `WWVB` as the sole transmissible protocol while clearly blocking planned protocols from starting fake transmissions.
+- Expanded the status panel with `Selected Signal`, `Protocol Status`, and `Carrier Strategy`.
+- Updated the protected `60-Bit Frame` area so it remains present while clearly acting as a WWVB reference when planned protocols are selected.
+- Preserved the existing graph and audible monitor behavior for `WWVB` while preventing misleading live-signal behavior for planned protocols.
+- Split the output behavior so radio mode drives the real WWVB carrier path while audible mode plays a human-audible monitor pattern with an explicit watch-sync warning.
+
+### Documentation
+- Expanded `wwvb_emulator_spec.md` with detailed `v0.3` global expansion architecture requirements and acceptance criteria.
+- Updated `README.md` to describe `v0.3`, the current support boundary, and the public GitHub Pages deployment.
+
 ## v0.2 - 2026-04-22
 
 ### Status
@@ -22,6 +44,8 @@ All notable project progress should be recorded here. The product specification 
 - Updated the specification to reflect the current audible monitor behavior: low state silent, restored high state monitor beep.
 - Kept the specification aligned with the requirement that the 60-bit frame remains preserved as a separate stable core view.
 - Updated the specification to reflect the continuously scrolling step waveform and the aligned low/high graph semantics.
+- Added a repository `README.md` with project summary, usage notes, and the public GitHub Pages URL.
+- Expanded `.gitignore` to exclude common desktop metadata files from future commits.
 
 ## v0.1 - 2026-04-22
 

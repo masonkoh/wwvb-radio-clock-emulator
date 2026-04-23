@@ -8,6 +8,11 @@ const SCHEDULE_AHEAD_SECONDS = 12;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const TRANSITION_SCAN_DAYS = 370;
 const MARKER_SECONDS = new Set([0, 9, 19, 29, 39, 49, 59]);
+const MONITOR_BEEP_TONE = { frequency: 698.46, label: "F5" };
+const OUTPUT_MODES = {
+  RADIO: "radio",
+  AUDIBLE: "audible",
+};
 
 const BIT_WIDTH_SECONDS = {
   0: 0.2,
@@ -21,17 +26,166 @@ const BIT_LABELS = {
   [MARKER]: "Marker",
 };
 
-const MONITOR_BEEP_TONE = { frequency: 698.46, label: "F5" };
+const PROTOCOLS = [
+  {
+    id: "wwvb",
+    label: "WWVB 60 kHz",
+    shortLabel: "WWVB",
+    nominalFrequency: "60 kHz",
+    status: "stable",
+    region: "North America",
+    description: "Validated stable mode for WWVB-compatible and Multiband 6 watches in WWVB mode.",
+    frameType: "60-bit WWVB frame",
+    encoderAvailable: true,
+    transmitAvailable: true,
+    compatibility: "WWVB-compatible watches and Multiband 6 models receiving WWVB",
+    plannedReason: "",
+    carrierProfile: {
+      label: "20 kHz Square",
+      meta: "3rd-harmonic near-field strategy for stable WWVB transmission",
+      oscillatorType: "square",
+      oscillatorFrequency: 20000,
+    },
+    audibleMonitorProfile: "Silent on low, F5 monitor beep on high",
+    graphProfile: "Readable WWVB step waveform and one-second PWM envelope",
+    encodeFrame: buildWwvbFrame,
+    bitWidths: BIT_WIDTH_SECONDS,
+  },
+  {
+    id: "msf",
+    label: "MSF 60 kHz",
+    shortLabel: "MSF",
+    nominalFrequency: "60 kHz",
+    status: "planned",
+    region: "United Kingdom",
+    description: "UK radio time standard planned for a future version.",
+    frameType: "MSF frame (planned)",
+    encoderAvailable: false,
+    transmitAvailable: false,
+    compatibility: "MSF-capable watches only",
+    plannedReason: "MSF is listed in the protocol roadmap, but its encoder and carrier strategy are not implemented yet.",
+    carrierProfile: {
+      label: "Planned",
+      meta: "MSF carrier and protocol logic will be added in a later version.",
+    },
+    audibleMonitorProfile: "Planned",
+    graphProfile: "Planned",
+  },
+  {
+    id: "jjy60",
+    label: "JJY 60 kHz",
+    shortLabel: "JJY 60",
+    nominalFrequency: "60 kHz",
+    status: "planned",
+    region: "Japan",
+    description: "Japanese 60 kHz radio time standard planned for a future version.",
+    frameType: "JJY frame (planned)",
+    encoderAvailable: false,
+    transmitAvailable: false,
+    compatibility: "JJY-capable watches only",
+    plannedReason: "JJY 60 uses a different timecode format and is not yet implemented.",
+    carrierProfile: {
+      label: "Planned",
+      meta: "JJY 60 carrier and protocol behavior will be added later.",
+    },
+    audibleMonitorProfile: "Planned",
+    graphProfile: "Planned",
+  },
+  {
+    id: "jjy40",
+    label: "JJY 40 kHz",
+    shortLabel: "JJY 40",
+    nominalFrequency: "40 kHz",
+    status: "planned",
+    region: "Japan",
+    description: "Japanese 40 kHz radio time standard planned for a future version.",
+    frameType: "JJY frame (planned)",
+    encoderAvailable: false,
+    transmitAvailable: false,
+    compatibility: "JJY-capable watches only",
+    plannedReason: "JJY 40 requires a different carrier strategy and is not yet implemented.",
+    carrierProfile: {
+      label: "Planned",
+      meta: "Future work will define the 40 kHz carrier strategy and encoder path.",
+    },
+    audibleMonitorProfile: "Planned",
+    graphProfile: "Planned",
+  },
+  {
+    id: "dcf77",
+    label: "DCF77 77.5 kHz",
+    shortLabel: "DCF77",
+    nominalFrequency: "77.5 kHz",
+    status: "planned",
+    region: "Central Europe",
+    description: "Continental European radio time standard planned for a future version.",
+    frameType: "DCF77 frame (planned)",
+    encoderAvailable: false,
+    transmitAvailable: false,
+    compatibility: "DCF77-capable watches only",
+    plannedReason: "DCF77 support is planned but not implemented in the current release.",
+    carrierProfile: {
+      label: "Planned",
+      meta: "Future work will define the DCF77 carrier and protocol path.",
+    },
+    audibleMonitorProfile: "Planned",
+    graphProfile: "Planned",
+  },
+  {
+    id: "bpc",
+    label: "BPC 68.5 kHz",
+    shortLabel: "BPC",
+    nominalFrequency: "68.5 kHz",
+    status: "planned",
+    region: "China",
+    description: "Chinese radio time standard planned for a future version.",
+    frameType: "BPC frame (planned)",
+    encoderAvailable: false,
+    transmitAvailable: false,
+    compatibility: "BPC-capable watches only",
+    plannedReason: "BPC support remains on the roadmap and is not yet implemented.",
+    carrierProfile: {
+      label: "Planned",
+      meta: "Future work will define the BPC carrier and encoder path.",
+    },
+    audibleMonitorProfile: "Planned",
+    graphProfile: "Planned",
+  },
+];
+
+const PROTOCOLS_BY_ID = Object.fromEntries(PROTOCOLS.map((protocol) => [protocol.id, protocol]));
+const PROTOCOL_STATUS_LABELS = {
+  stable: "Stable",
+  experimental: "Experimental",
+  planned: "Planned",
+};
 
 const dom = {
   startButton: document.querySelector("#startButton"),
   stopButton: document.querySelector("#stopButton"),
-  monitorToggle: document.querySelector("#monitorToggle"),
+  outputModeRadio: document.querySelector("#outputModeRadio"),
+  outputModeAudible: document.querySelector("#outputModeAudible"),
+  supportBoundaryNote: document.querySelector("#supportBoundaryNote"),
+  transmitGuardNote: document.querySelector("#transmitGuardNote"),
+  protocolSelect: document.querySelector("#protocolSelect"),
+  signalModeSummary: document.querySelector("#signalModeSummary"),
+  selectedSignalHeroValue: document.querySelector("#selectedSignalHeroValue"),
+  selectedSignalHeroMeta: document.querySelector("#selectedSignalHeroMeta"),
+  protocolCompatibilityValue: document.querySelector("#protocolCompatibilityValue"),
+  protocolCompatibilityMeta: document.querySelector("#protocolCompatibilityMeta"),
   statusBadge: document.querySelector("#statusBadge"),
   localTimeValue: document.querySelector("#localTimeValue"),
   frameTimeValue: document.querySelector("#frameTimeValue"),
   currentBitValue: document.querySelector("#currentBitValue"),
   pulseWidthValue: document.querySelector("#pulseWidthValue"),
+  selectedSignalValue: document.querySelector("#selectedSignalValue"),
+  selectedSignalMeta: document.querySelector("#selectedSignalMeta"),
+  protocolStatusValue: document.querySelector("#protocolStatusValue"),
+  protocolStatusMeta: document.querySelector("#protocolStatusMeta"),
+  carrierValue: document.querySelector("#carrierValue"),
+  carrierMeta: document.querySelector("#carrierMeta"),
+  carrierStrategyValue: document.querySelector("#carrierStrategyValue"),
+  carrierStrategyMeta: document.querySelector("#carrierStrategyMeta"),
   audioEngineValue: document.querySelector("#audioEngineValue"),
   monitorStatusValue: document.querySelector("#monitorStatusValue"),
   monitorStatusMeta: document.querySelector("#monitorStatusMeta"),
@@ -40,6 +194,7 @@ const dom = {
   envelopeCanvas: document.querySelector("#envelopeCanvas"),
   frameGrid: document.querySelector("#frameGrid"),
   frameMinuteLabel: document.querySelector("#frameMinuteLabel"),
+  signalLogicText: document.querySelector("#signalLogicText"),
 };
 
 let audioContext = null;
@@ -48,13 +203,14 @@ let gainNode = null;
 let monitorOscillatorNode = null;
 let monitorGainNode = null;
 let isTransmitting = false;
-let isMonitorEnabled = false;
+let activeProtocolId = "wwvb";
+let activeOutputMode = OUTPUT_MODES.RADIO;
 let schedulerFrameId = null;
 let uiFrameId = null;
 let scheduledThroughSecondMs = null;
 let wallToAudioOffsetSeconds = 0;
-let activeFrameKey = "";
-let activeFrame = [];
+let referenceFrameKey = "";
+let referenceFrame = [];
 let frameCells = [];
 let waveformCtx = null;
 let envelopeCtx = null;
@@ -62,13 +218,44 @@ const dstTransitionCache = new Map();
 
 dom.startButton.addEventListener("click", startTransmit);
 dom.stopButton.addEventListener("click", stopTransmit);
-dom.monitorToggle.addEventListener("change", handleMonitorToggle);
+dom.outputModeRadio.addEventListener("change", handleOutputModeChange);
+dom.outputModeAudible.addEventListener("change", handleOutputModeChange);
+dom.protocolSelect.addEventListener("change", handleProtocolSelect);
 window.addEventListener("resize", resizeGraphCanvases);
 
-renderFrame(Array.from({ length: 60 }, (_, index) => (MARKER_SECONDS.has(index) ? MARKER : 0)));
 setupGraphContexts();
+renderProtocolOptions();
+syncReferenceFrame(new Date());
+updateProtocolPresentation();
 startUiLoop();
 updateMonitorStatus();
+
+function isAudibleMode() {
+  return activeOutputMode === OUTPUT_MODES.AUDIBLE;
+}
+
+function getActiveProtocol() {
+  return PROTOCOLS_BY_ID[activeProtocolId] || PROTOCOLS[0];
+}
+
+function isProtocolTransmissible(protocol) {
+  return Boolean(protocol && protocol.transmitAvailable && protocol.encoderAvailable);
+}
+
+function getProtocolStatusLabel(protocol) {
+  return PROTOCOL_STATUS_LABELS[protocol.status] || protocol.status;
+}
+
+function getPulseWidthForBit(protocol, bit) {
+  return protocol.bitWidths?.[bit] ?? BIT_WIDTH_SECONDS[bit];
+}
+
+function encodeFrame(date, protocol) {
+  if (!protocol || !protocol.encoderAvailable || typeof protocol.encodeFrame !== "function") {
+    return null;
+  }
+  return protocol.encodeFrame(date);
+}
 
 function floorToMinute(date) {
   return new Date(date.getTime() - date.getUTCSeconds() * 1000 - date.getUTCMilliseconds());
@@ -233,41 +420,10 @@ function computeDstBits(frameStart) {
   return isDstActive(frameStart) ? [1, 1] : [0, 0];
 }
 
-function describeBit(bit) {
-  return `${BIT_LABELS[bit]} (${BIT_WIDTH_SECONDS[bit].toFixed(1)}s)`;
-}
-
-function setupGraphContexts() {
-  waveformCtx = dom.waveformCanvas.getContext("2d");
-  envelopeCtx = dom.envelopeCanvas.getContext("2d");
-  resizeGraphCanvases();
-}
-
-function resizeCanvasToDisplaySize(canvas, heightPx) {
-  const ratio = window.devicePixelRatio || 1;
-  const width = Math.max(320, Math.floor(canvas.clientWidth * ratio));
-  const height = Math.floor(heightPx * ratio);
-
-  if (canvas.width !== width || canvas.height !== height) {
-    canvas.width = width;
-    canvas.height = height;
-  }
-}
-
-function resizeGraphCanvases() {
-  if (!dom.waveformCanvas || !dom.envelopeCanvas) {
-    return;
-  }
-
-  resizeCanvasToDisplaySize(dom.waveformCanvas, 220);
-  resizeCanvasToDisplaySize(dom.envelopeCanvas, 180);
-}
-
 function describeSecond(second, bit) {
   if (bit === MARKER) {
     return `Marker at second ${second}`;
   }
-
   if (second >= 1 && second <= 8) {
     return "Minute";
   }
@@ -308,53 +464,41 @@ function renderFrame(frame) {
   });
 }
 
-function setLiveState(live) {
-  dom.startButton.disabled = live;
-  dom.stopButton.disabled = !live;
-  dom.statusBadge.textContent = live ? "Live" : "Idle";
-  dom.statusBadge.classList.toggle("badge-live", live);
-  dom.statusBadge.classList.toggle("badge-idle", !live);
-  dom.audioEngineValue.textContent = live ? "Running" : "Standby";
+function syncReferenceFrame(now) {
+  const frameStart = floorToMinute(now);
+  const frameKey = frameStart.toISOString();
+  if (frameKey !== referenceFrameKey) {
+    referenceFrameKey = frameKey;
+    referenceFrame = buildWwvbFrame(frameStart);
+    renderFrame(referenceFrame);
+  }
+  return { frameStart, frame: referenceFrame };
 }
 
-function updateMonitorStatus(currentBit = null) {
-  const active = isTransmitting && isMonitorEnabled;
-  dom.monitorStatusValue.textContent = active ? "Enabled" : "Disabled";
+function setupGraphContexts() {
+  waveformCtx = dom.waveformCanvas.getContext("2d");
+  envelopeCtx = dom.envelopeCanvas.getContext("2d");
+  resizeGraphCanvases();
+}
 
-  if (active && currentBit !== null) {
-    const inLowPhase = new Date().getUTCMilliseconds() / 1000 < BIT_WIDTH_SECONDS[currentBit];
-    dom.monitorStatusMeta.textContent =
-      inLowPhase
-        ? "Monitor active: low state is silent"
-        : `Monitor active: high state beep ${MONITOR_BEEP_TONE.label} (${MONITOR_BEEP_TONE.frequency.toFixed(2)} Hz)`;
+function resizeCanvasToDisplaySize(canvas, heightPx) {
+  const ratio = window.devicePixelRatio || 1;
+  const width = Math.max(320, Math.floor(canvas.clientWidth * ratio));
+  const height = Math.floor(heightPx * ratio);
+
+  if (canvas.width !== width || canvas.height !== height) {
+    canvas.width = width;
+    canvas.height = height;
+  }
+}
+
+function resizeGraphCanvases() {
+  if (!dom.waveformCanvas || !dom.envelopeCanvas) {
     return;
   }
 
-  dom.monitorStatusMeta.textContent = isMonitorEnabled
-    ? `Monitor armed: silent on low, beep on high (${MONITOR_BEEP_TONE.label})`
-    : "Audible monitor is off";
-}
-
-function syncMonitorGain() {
-  if (!monitorGainNode || !audioContext) {
-    updateMonitorStatus();
-    return;
-  }
-
-  const now = audioContext.currentTime;
-  monitorGainNode.gain.cancelScheduledValues(now);
-  monitorGainNode.gain.setValueAtTime(monitorGainNode.gain.value, now);
-
-  if (!isTransmitting || !isMonitorEnabled) {
-    monitorGainNode.gain.linearRampToValueAtTime(0, now + RAMP_SECONDS);
-  }
-
-  updateMonitorStatus();
-}
-
-function handleMonitorToggle(event) {
-  isMonitorEnabled = event.target.checked;
-  syncMonitorGain();
+  resizeCanvasToDisplaySize(dom.waveformCanvas, 220);
+  resizeCanvasToDisplaySize(dom.envelopeCanvas, 180);
 }
 
 function formatLocalTime(date) {
@@ -368,7 +512,7 @@ function formatLocalTime(date) {
 }
 
 function formatUtcFrame(date) {
-  return `${new Intl.DateTimeFormat([], {
+  return new Intl.DateTimeFormat([], {
     year: "numeric",
     month: "short",
     day: "2-digit",
@@ -378,34 +522,144 @@ function formatUtcFrame(date) {
     hour12: false,
     timeZone: "UTC",
     timeZoneName: "short",
-  }).format(date)}`;
+  }).format(date);
+}
+
+function renderProtocolOptions() {
+  const activeProtocol = getActiveProtocol();
+
+  dom.protocolSelect.innerHTML = "";
+  PROTOCOLS.forEach((protocol) => {
+    const option = document.createElement("option");
+    option.value = protocol.id;
+    option.selected = protocol.id === activeProtocol.id;
+    option.textContent = `${protocol.label} — ${getProtocolStatusLabel(protocol)}`;
+    dom.protocolSelect.appendChild(option);
+  });
+
+  dom.protocolSelect.disabled = isTransmitting;
+}
+
+function handleProtocolSelect(event) {
+  const protocolId = event?.target?.value ?? event;
+  if (isTransmitting || protocolId === activeProtocolId || !PROTOCOLS_BY_ID[protocolId]) {
+    return;
+  }
+
+  activeProtocolId = protocolId;
+  updateProtocolPresentation();
+  updateStatusPanel(new Date());
+  drawSignalGraphs(new Date());
+}
+
+function updateControlState() {
+  const protocol = getActiveProtocol();
+  dom.startButton.disabled = isTransmitting || !isProtocolTransmissible(protocol);
+  dom.stopButton.disabled = !isTransmitting;
+  dom.outputModeRadio.disabled = isTransmitting;
+  dom.outputModeAudible.disabled = isTransmitting;
+}
+
+function setLiveState(live) {
+  dom.statusBadge.textContent = live ? "Live" : "Idle";
+  dom.statusBadge.classList.toggle("badge-live", live);
+  dom.statusBadge.classList.toggle("badge-idle", !live);
+  dom.audioEngineValue.textContent = live ? "Running" : "Standby";
+  renderProtocolOptions();
+  updateControlState();
+}
+
+function updateProtocolPresentation() {
+  const protocol = getActiveProtocol();
+  const transmissible = isProtocolTransmissible(protocol);
+
+  dom.signalModeSummary.textContent = `${protocol.label} selected · ${getProtocolStatusLabel(protocol)}`;
+  dom.selectedSignalHeroValue.textContent = protocol.label;
+  dom.selectedSignalHeroMeta.textContent = `${protocol.region} · ${getProtocolStatusLabel(protocol)} · ${protocol.frameType}`;
+  dom.protocolCompatibilityValue.textContent = protocol.compatibility;
+  dom.protocolCompatibilityMeta.textContent = transmissible
+    ? "Only WWVB is transmissible in v0.3. Planned standards are shown so the expansion path is explicit."
+    : protocol.plannedReason;
+
+  dom.supportBoundaryNote.textContent = transmissible
+    ? "Stable today: WWVB-compatible watches. Other radio time standards are planned, not active yet."
+    : `${protocol.label} is planned. Stable live transmission remains available only in WWVB mode today.`;
+
+  if (!transmissible) {
+    dom.transmitGuardNote.textContent = `${protocol.shortLabel} cannot transmit yet. Select WWVB to use the validated live transmission path.`;
+  } else if (isAudibleMode()) {
+    dom.transmitGuardNote.textContent = "Audible Monitor Tone Mode is for human listening only. Switch back to Radio Reception Mode for real watch synchronization.";
+  } else {
+    dom.transmitGuardNote.textContent = "Radio Reception Mode uses the validated WWVB path for actual watch synchronization.";
+  }
+
+  updateControlState();
+  updateMonitorStatus();
+}
+
+function updateSignalLogicText(protocol) {
+  dom.signalLogicText.textContent = isProtocolTransmissible(protocol)
+    ? "Markers are emitted at seconds 0, 9, 19, 29, 39, 49, and 59. Data pulses follow the NIST WWVB AM timing envelope."
+    : `${protocol.label} is currently listed as a planned protocol. Transmission remains blocked until its encoder, carrier strategy, graph profile, and validation path are implemented.`;
 }
 
 function updateStatusPanel(now) {
-  const frameStart = floorToMinute(now);
-  const frameKey = frameStart.toISOString();
-
-  if (frameKey !== activeFrameKey) {
-    activeFrameKey = frameKey;
-    activeFrame = buildWwvbFrame(frameStart);
-    renderFrame(activeFrame);
-  }
-
+  const protocol = getActiveProtocol();
+  const transmissible = isProtocolTransmissible(protocol);
+  const { frameStart, frame } = syncReferenceFrame(now);
   const second = now.getUTCSeconds();
-  const currentBit = activeFrame[second];
+  const currentBit = transmissible ? frame[second] : null;
 
   frameCells.forEach((cell, index) => {
-    cell.classList.toggle("frame-cell-active", isTransmitting && index === second);
+    cell.classList.toggle("frame-cell-active", isTransmitting && transmissible && index === second);
   });
 
   dom.localTimeValue.textContent = formatLocalTime(now);
-  dom.frameTimeValue.textContent = formatUtcFrame(frameStart);
-  dom.frameMinuteLabel.textContent = `Minute frame: ${frameStart.toISOString().slice(11, 16)} UTC`;
-  dom.currentBitValue.textContent = BIT_LABELS[currentBit];
-  dom.pulseWidthValue.textContent = `Pulse width: ${BIT_WIDTH_SECONDS[currentBit].toFixed(1)}s`;
-  dom.graphStatusLabel.textContent = isTransmitting
-    ? `Live bit ${BIT_LABELS[currentBit]} with ${BIT_WIDTH_SECONDS[currentBit].toFixed(1)}s low pulse`
-    : "Waiting for transmission";
+  dom.selectedSignalValue.textContent = protocol.label;
+  dom.selectedSignalMeta.textContent = `${protocol.region} · ${protocol.frameType}`;
+  dom.protocolStatusValue.textContent = getProtocolStatusLabel(protocol);
+  dom.protocolStatusMeta.textContent = transmissible
+    ? isTransmitting
+      ? isAudibleMode()
+        ? "Audible monitor output is transmitting the WWVB timing pattern."
+        : "Validated WWVB mode is transmitting."
+      : isAudibleMode()
+        ? "Audible monitor mode is ready to play the WWVB timing pattern."
+        : "Validated WWVB mode is ready to transmit."
+    : protocol.plannedReason;
+  dom.carrierValue.textContent = transmissible
+    ? isAudibleMode()
+      ? `${MONITOR_BEEP_TONE.label} Monitor`
+      : protocol.carrierProfile.label
+    : `${protocol.nominalFrequency} Target`;
+  dom.carrierMeta.textContent = transmissible
+    ? isAudibleMode()
+      ? "Human-audible output path. This mode is not for actual watch radio reception."
+      : "Active near-field carrier path for the validated WWVB transmission mode"
+    : "No live carrier path is implemented yet for the selected planned protocol.";
+  dom.carrierStrategyValue.textContent = isAudibleMode() ? "Audible Monitor Playback" : protocol.carrierProfile.label;
+  dom.carrierStrategyMeta.textContent = isAudibleMode()
+    ? "WWVB timing is rendered as an audible monitor pattern instead of a radio reception carrier."
+    : protocol.carrierProfile.meta;
+
+  if (transmissible) {
+    const pulseWidth = getPulseWidthForBit(protocol, currentBit);
+    dom.frameTimeValue.textContent = formatUtcFrame(frameStart);
+    dom.frameMinuteLabel.textContent = `Minute frame: ${frameStart.toISOString().slice(11, 16)} UTC`;
+    dom.currentBitValue.textContent = BIT_LABELS[currentBit];
+    dom.pulseWidthValue.textContent = `Pulse width: ${pulseWidth.toFixed(1)}s`;
+    dom.graphStatusLabel.textContent = isTransmitting
+      ? `Live ${protocol.shortLabel} bit ${BIT_LABELS[currentBit]} with ${pulseWidth.toFixed(1)}s low pulse`
+      : `${protocol.shortLabel} graph is armed and ready`;
+  } else {
+    dom.frameTimeValue.textContent = "Planned mode";
+    dom.frameMinuteLabel.textContent = `WWVB reference frame: ${frameStart.toISOString().slice(11, 16)} UTC`;
+    dom.currentBitValue.textContent = "Unavailable";
+    dom.pulseWidthValue.textContent = "Pulse width: --";
+    dom.graphStatusLabel.textContent = `${protocol.shortLabel} is planned. Live graphs activate only in WWVB stable mode.`;
+  }
+
+  updateSignalLogicText(protocol);
   updateMonitorStatus(currentBit);
 }
 
@@ -420,11 +674,75 @@ function startUiLoop() {
   draw();
 }
 
+function updateMonitorStatus(currentBit = null) {
+  const protocol = getActiveProtocol();
+  const transmissible = isProtocolTransmissible(protocol);
+  const audible = isAudibleMode();
+  const active = isTransmitting && transmissible;
+
+  if (!transmissible) {
+    dom.monitorStatusValue.textContent = audible ? "Audible" : "Radio";
+    dom.monitorStatusMeta.textContent = `${protocol.shortLabel} has no live output path yet in either mode.`;
+    return;
+  }
+
+  dom.monitorStatusValue.textContent = audible ? "Audible" : "Radio";
+
+  if (active && currentBit !== null) {
+    const inLowPhase = new Date().getUTCMilliseconds() / 1000 < getPulseWidthForBit(protocol, currentBit);
+    dom.monitorStatusMeta.textContent = audible
+      ? inLowPhase
+        ? "Audible mode active: low state is silent."
+        : `Audible mode active: high state plays ${MONITOR_BEEP_TONE.label} (${MONITOR_BEEP_TONE.frequency.toFixed(2)} Hz).`
+      : "Radio reception mode active: validated WWVB path is driving the speaker for watch synchronization.";
+    return;
+  }
+
+  dom.monitorStatusMeta.textContent = audible
+    ? "Audible mode is selected. This mode is for human listening, not actual watch synchronization."
+    : "Radio reception mode is selected for real watch synchronization.";
+}
+
+function syncOutputModeGains() {
+  if (!monitorGainNode || !audioContext) {
+    updateMonitorStatus();
+    return;
+  }
+
+  const now = audioContext.currentTime;
+  monitorGainNode.gain.cancelScheduledValues(now);
+  monitorGainNode.gain.setValueAtTime(monitorGainNode.gain.value, now);
+  gainNode.gain.cancelScheduledValues(now);
+  gainNode.gain.setValueAtTime(gainNode.gain.value, now);
+
+  if (!isTransmitting || !isAudibleMode()) {
+    monitorGainNode.gain.linearRampToValueAtTime(0, now + RAMP_SECONDS);
+  }
+
+  if (!isTransmitting || isAudibleMode()) {
+    gainNode.gain.linearRampToValueAtTime(0, now + RAMP_SECONDS);
+  }
+
+  updateMonitorStatus();
+}
+
+function handleOutputModeChange(event) {
+  if (!event.target.checked) {
+    return;
+  }
+
+  activeOutputMode = event.target.value;
+  updateProtocolPresentation();
+  updateStatusPanel(new Date());
+  syncOutputModeGains();
+}
+
 function ensureAudioGraph() {
   if (audioContext) {
     return;
   }
 
+  const protocol = getActiveProtocol();
   const AudioContextClass = window.AudioContext || window.webkitAudioContext;
   audioContext = new AudioContextClass();
   oscillatorNode = audioContext.createOscillator();
@@ -432,8 +750,8 @@ function ensureAudioGraph() {
   monitorOscillatorNode = audioContext.createOscillator();
   monitorGainNode = audioContext.createGain();
 
-  oscillatorNode.type = "square";
-  oscillatorNode.frequency.value = 20000;
+  oscillatorNode.type = protocol.carrierProfile.oscillatorType;
+  oscillatorNode.frequency.value = protocol.carrierProfile.oscillatorFrequency;
   gainNode.gain.value = HIGH_GAIN;
   monitorOscillatorNode.type = "triangle";
   monitorOscillatorNode.frequency.value = MONITOR_BEEP_TONE.frequency;
@@ -473,26 +791,39 @@ function drawCanvasFrame(ctx, canvas, accent) {
   ctx.lineWidth = 2;
 }
 
-function drawIdleGraphState() {
+function drawIdleGraphState(protocol) {
   if (!waveformCtx || !envelopeCtx) {
     return;
   }
 
+  const ratio = window.devicePixelRatio || 1;
   drawCanvasFrame(waveformCtx, dom.waveformCanvas, "rgba(86, 217, 255, 0.9)");
   drawCanvasFrame(envelopeCtx, dom.envelopeCanvas, "rgba(255, 211, 108, 0.9)");
 
   waveformCtx.fillStyle = "rgba(148, 165, 199, 0.92)";
-  waveformCtx.font = `${14 * (window.devicePixelRatio || 1)}px SFMono-Regular, Menlo, monospace`;
-  waveformCtx.fillText("No live waveform. Start transmission to visualize output.", 24, 32);
+  waveformCtx.font = `${14 * ratio}px SFMono-Regular, Menlo, monospace`;
+  waveformCtx.fillText(
+    isProtocolTransmissible(protocol)
+      ? "No live waveform. Start transmission to visualize output."
+      : `${protocol.shortLabel} is planned. Live waveform remains available only in WWVB stable mode.`,
+    24,
+    32,
+  );
 
   envelopeCtx.fillStyle = "rgba(148, 165, 199, 0.92)";
-  envelopeCtx.font = `${14 * (window.devicePixelRatio || 1)}px SFMono-Regular, Menlo, monospace`;
-  envelopeCtx.fillText("PWM envelope preview is inactive until transmission starts.", 24, 32);
+  envelopeCtx.font = `${14 * ratio}px SFMono-Regular, Menlo, monospace`;
+  envelopeCtx.fillText(
+    isProtocolTransmissible(protocol)
+      ? "PWM envelope preview is inactive until transmission starts."
+      : "Current PWM envelope becomes available when a supported protocol is implemented.",
+    24,
+    32,
+  );
 }
 
-function drawWaveformGraph(now) {
-  if (!waveformCtx || !activeFrame.length) {
-    drawIdleGraphState();
+function drawWaveformGraph(now, protocol) {
+  if (!waveformCtx || !referenceFrame.length || !isProtocolTransmissible(protocol)) {
+    drawIdleGraphState(protocol);
     return;
   }
 
@@ -518,13 +849,12 @@ function drawWaveformGraph(now) {
   waveformCtx.lineWidth = 2.5 * ratio;
   waveformCtx.lineJoin = "round";
   waveformCtx.lineCap = "round";
-
   waveformCtx.beginPath();
   waveformCtx.moveTo(xForTime(startTime), highY);
 
   for (let bitSecond = firstVisibleSecond; bitSecond <= lastVisibleSecond; bitSecond += 1) {
-    const bit = activeFrame[bitSecond] ?? MARKER;
-    const pulseWidth = BIT_WIDTH_SECONDS[bit];
+    const bit = referenceFrame[bitSecond] ?? MARKER;
+    const pulseWidth = getPulseWidthForBit(protocol, bit);
     const segStartTime = bitSecond;
     const segPulseEndTime = bitSecond + pulseWidth;
     const segEndTime = bitSecond + 1;
@@ -551,7 +881,7 @@ function drawWaveformGraph(now) {
   waveformCtx.stroke();
   waveformCtx.fillStyle = "rgba(239, 245, 255, 0.9)";
   waveformCtx.font = `${14 * ratio}px SFMono-Regular, Menlo, monospace`;
-  waveformCtx.fillText("Step waveform view of recent WWVB pulse windows", padX, padY);
+  waveformCtx.fillText(`Step waveform view of recent ${protocol.shortLabel} pulse windows`, padX, padY);
 
   const cursorX = xForTime(Math.min(endTime, nowSeconds));
   waveformCtx.strokeStyle = "rgba(115, 245, 199, 0.9)";
@@ -573,19 +903,20 @@ function drawWaveformGraph(now) {
   }
 }
 
-function drawEnvelopeGraph(now) {
-  if (!envelopeCtx) {
+function drawEnvelopeGraph(now, protocol) {
+  if (!envelopeCtx || !isProtocolTransmissible(protocol)) {
     return;
   }
 
   const canvas = dom.envelopeCanvas;
   drawCanvasFrame(envelopeCtx, canvas, "rgba(255, 211, 108, 0.95)");
 
-  const bit = activeFrame[now.getUTCSeconds()] ?? MARKER;
-  const pulseWidth = BIT_WIDTH_SECONDS[bit];
+  const bit = referenceFrame[now.getUTCSeconds()] ?? MARKER;
+  const pulseWidth = getPulseWidthForBit(protocol, bit);
   const currentSecondFraction = now.getUTCMilliseconds() / 1000;
-  const padX = 24 * (window.devicePixelRatio || 1);
-  const padY = 22 * (window.devicePixelRatio || 1);
+  const ratio = window.devicePixelRatio || 1;
+  const padX = 24 * ratio;
+  const padY = 22 * ratio;
   const graphWidth = canvas.width - padX * 2;
   const highLevelY = padY + (canvas.height - padY * 2) * 0.16;
   const lowLevelY = padY + (canvas.height - padY * 2) * 0.78;
@@ -612,22 +943,27 @@ function drawEnvelopeGraph(now) {
   envelopeCtx.stroke();
 
   envelopeCtx.fillStyle = "rgba(239, 245, 255, 0.92)";
-  envelopeCtx.font = `${14 * (window.devicePixelRatio || 1)}px SFMono-Regular, Menlo, monospace`;
-  envelopeCtx.fillText(`Bit ${BIT_LABELS[bit]}: low for ${pulseWidth.toFixed(1)}s, high for ${(1 - pulseWidth).toFixed(1)}s`, padX, padY);
-  envelopeCtx.fillText("0.0s", padX, canvas.height - 6 * (window.devicePixelRatio || 1));
-  envelopeCtx.fillText("1.0s", canvas.width - padX - 40 * (window.devicePixelRatio || 1), canvas.height - 6 * (window.devicePixelRatio || 1));
+  envelopeCtx.font = `${14 * ratio}px SFMono-Regular, Menlo, monospace`;
+  envelopeCtx.fillText(
+    `Bit ${BIT_LABELS[bit]}: low for ${pulseWidth.toFixed(1)}s, high for ${(1 - pulseWidth).toFixed(1)}s`,
+    padX,
+    padY,
+  );
+  envelopeCtx.fillText("0.0s", padX, canvas.height - 6 * ratio);
+  envelopeCtx.fillText("1.0s", canvas.width - padX - 40 * ratio, canvas.height - 6 * ratio);
 }
 
 function drawSignalGraphs(now) {
   resizeGraphCanvases();
+  const protocol = getActiveProtocol();
 
-  if (!isTransmitting || !audioContext) {
-    drawIdleGraphState();
+  if (!isTransmitting || !audioContext || !isProtocolTransmissible(protocol)) {
+    drawIdleGraphState(protocol);
     return;
   }
 
-  drawWaveformGraph(now);
-  drawEnvelopeGraph(now);
+  drawWaveformGraph(now, protocol);
+  drawEnvelopeGraph(now, protocol);
 }
 
 function audioTimeForWallMs(wallMs) {
@@ -654,49 +990,70 @@ function scheduleMonitorToneForSecond(audioStartTime, dropDuration) {
 }
 
 function scheduleBitForSecond(secondDate, audioStartTime) {
-  const frame = buildWwvbFrame(secondDate);
+  const protocol = getActiveProtocol();
+  const frame = encodeFrame(secondDate, protocol);
+  if (!frame) {
+    return;
+  }
+
   const bit = frame[secondDate.getUTCSeconds()];
-  const dropDuration = BIT_WIDTH_SECONDS[bit];
+  const dropDuration = getPulseWidthForBit(protocol, bit);
   const dropEndTime = audioStartTime + dropDuration;
   const secondEndTime = audioStartTime + 1;
   const rampDownEnd = audioStartTime + RAMP_SECONDS;
   const holdLowUntil = Math.max(rampDownEnd, dropEndTime - RAMP_SECONDS);
 
+  if (isAudibleMode()) {
+    gainNode.gain.setValueAtTime(0, audioStartTime);
+    gainNode.gain.setValueAtTime(0, secondEndTime);
+    scheduleMonitorToneForSecond(audioStartTime, dropDuration);
+    return;
+  }
+
+  monitorGainNode.gain.setValueAtTime(0, audioStartTime);
+  monitorGainNode.gain.setValueAtTime(0, secondEndTime);
   gainNode.gain.setValueAtTime(HIGH_GAIN, audioStartTime);
   gainNode.gain.linearRampToValueAtTime(LOW_GAIN, rampDownEnd);
   gainNode.gain.setValueAtTime(LOW_GAIN, holdLowUntil);
   gainNode.gain.linearRampToValueAtTime(HIGH_GAIN, dropEndTime);
   gainNode.gain.setValueAtTime(HIGH_GAIN, secondEndTime);
-  if (isMonitorEnabled) {
-    scheduleMonitorToneForSecond(audioStartTime, dropDuration);
-  }
 }
 
 function primeCurrentSecond(nowMs) {
+  const protocol = getActiveProtocol();
   const currentSecondMs = Math.floor(nowMs / 1000) * 1000;
   const secondDate = new Date(currentSecondMs);
-  const frame = buildWwvbFrame(secondDate);
-  const bit = frame[secondDate.getUTCSeconds()];
-  const secondPhaseSeconds = (nowMs - currentSecondMs) / 1000;
-  const dropDuration = BIT_WIDTH_SECONDS[bit];
-  const nowAudio = audioContext.currentTime;
-  const currentValue = gainNode.gain.value;
-  const targetValue = secondPhaseSeconds < dropDuration ? LOW_GAIN : HIGH_GAIN;
-
-  gainNode.gain.cancelScheduledValues(nowAudio);
-  gainNode.gain.setValueAtTime(currentValue, nowAudio);
-  gainNode.gain.linearRampToValueAtTime(targetValue, nowAudio + RAMP_SECONDS);
-
-  if (secondPhaseSeconds < dropDuration) {
-    const dropEndWallMs = currentSecondMs + dropDuration * 1000;
-    const dropEndAudioTime = audioTimeForWallMs(dropEndWallMs);
-    gainNode.gain.setValueAtTime(LOW_GAIN, Math.max(nowAudio + RAMP_SECONDS, dropEndAudioTime - RAMP_SECONDS));
-    gainNode.gain.linearRampToValueAtTime(HIGH_GAIN, dropEndAudioTime);
+  const frame = encodeFrame(secondDate, protocol);
+  if (!frame) {
+    scheduledThroughSecondMs = currentSecondMs;
+    return;
   }
 
-  gainNode.gain.setValueAtTime(HIGH_GAIN, audioTimeForWallMs(currentSecondMs + 1000));
+  const bit = frame[secondDate.getUTCSeconds()];
+  const secondPhaseSeconds = (nowMs - currentSecondMs) / 1000;
+  const dropDuration = getPulseWidthForBit(protocol, bit);
+  const nowAudio = audioContext.currentTime;
+  if (!isAudibleMode()) {
+    const currentValue = gainNode.gain.value;
+    const targetValue = secondPhaseSeconds < dropDuration ? LOW_GAIN : HIGH_GAIN;
 
-  if (monitorOscillatorNode && monitorGainNode) {
+    gainNode.gain.cancelScheduledValues(nowAudio);
+    gainNode.gain.setValueAtTime(currentValue, nowAudio);
+    gainNode.gain.linearRampToValueAtTime(targetValue, nowAudio + RAMP_SECONDS);
+
+    if (secondPhaseSeconds < dropDuration) {
+      const dropEndWallMs = currentSecondMs + dropDuration * 1000;
+      const dropEndAudioTime = audioTimeForWallMs(dropEndWallMs);
+      gainNode.gain.setValueAtTime(LOW_GAIN, Math.max(nowAudio + RAMP_SECONDS, dropEndAudioTime - RAMP_SECONDS));
+      gainNode.gain.linearRampToValueAtTime(HIGH_GAIN, dropEndAudioTime);
+    }
+
+    gainNode.gain.setValueAtTime(HIGH_GAIN, audioTimeForWallMs(currentSecondMs + 1000));
+    monitorGainNode.gain.cancelScheduledValues(nowAudio);
+    monitorGainNode.gain.setValueAtTime(0, nowAudio);
+  }
+
+  if (monitorOscillatorNode && monitorGainNode && isAudibleMode()) {
     const inLowPhase = secondPhaseSeconds < dropDuration;
     const currentSecondEndAudio = audioTimeForWallMs(currentSecondMs + 1000);
     monitorOscillatorNode.frequency.cancelScheduledValues(nowAudio);
@@ -705,9 +1062,10 @@ function primeCurrentSecond(nowMs) {
     monitorGainNode.gain.cancelScheduledValues(nowAudio);
     monitorGainNode.gain.setValueAtTime(monitorGainNode.gain.value, nowAudio);
 
-    if (!isMonitorEnabled) {
-      monitorGainNode.gain.linearRampToValueAtTime(0, nowAudio + RAMP_SECONDS);
-    } else if (inLowPhase) {
+    gainNode.gain.cancelScheduledValues(nowAudio);
+    gainNode.gain.setValueAtTime(0, nowAudio);
+
+    if (inLowPhase) {
       const dropEndWallMs = currentSecondMs + dropDuration * 1000;
       const dropEndAudioTime = audioTimeForWallMs(dropEndWallMs);
       monitorGainNode.gain.linearRampToValueAtTime(0, Math.max(nowAudio + RAMP_SECONDS, dropEndAudioTime - RAMP_SECONDS));
@@ -731,7 +1089,8 @@ function primeCurrentSecond(nowMs) {
 }
 
 function schedulerLoop() {
-  if (!isTransmitting || !audioContext || !gainNode) {
+  const protocol = getActiveProtocol();
+  if (!isTransmitting || !audioContext || !gainNode || !isProtocolTransmissible(protocol)) {
     return;
   }
 
@@ -740,7 +1099,6 @@ function schedulerLoop() {
   );
 
   let nextSecondMs = scheduledThroughSecondMs === null ? null : scheduledThroughSecondMs + 1000;
-
   if (nextSecondMs === null) {
     const leadTimeMs = 300;
     nextSecondMs = Math.ceil((Date.now() + leadTimeMs) / 1000) * 1000;
@@ -756,7 +1114,9 @@ function schedulerLoop() {
 }
 
 async function startTransmit() {
-  if (isTransmitting) {
+  const protocol = getActiveProtocol();
+  if (isTransmitting || !isProtocolTransmissible(protocol)) {
+    updateProtocolPresentation();
     return;
   }
 
@@ -768,7 +1128,7 @@ async function startTransmit() {
   isTransmitting = true;
   setLiveState(true);
   primeCurrentSecond(nowMs);
-  syncMonitorGain();
+  syncOutputModeGains();
   schedulerLoop();
 }
 
@@ -778,7 +1138,6 @@ async function stopTransmit() {
   }
 
   isTransmitting = false;
-  setLiveState(false);
   cancelAnimationFrame(schedulerFrameId);
   schedulerFrameId = null;
   scheduledThroughSecondMs = null;
@@ -806,5 +1165,6 @@ async function stopTransmit() {
   gainNode = null;
   monitorOscillatorNode = null;
   monitorGainNode = null;
-  updateMonitorStatus();
+  setLiveState(false);
+  updateProtocolPresentation();
 }

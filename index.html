@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>WWVB Radio Clock Emulator</title>
+    <title>Radio-Controlled Watch Signal Emulator</title>
     <link rel="stylesheet" href="./style.css" />
   </head>
   <body>
@@ -11,18 +11,30 @@
       <div class="bg-grid" aria-hidden="true"></div>
       <header class="hero panel">
         <p class="eyebrow">60 kHz Longwave Clock Signal Emulator</p>
-        <h1>WWVB Speaker Transmitter</h1>
+        <h1>Radio-Controlled Watch Signal Emulator</h1>
         <p class="hero-copy">
-          Generates a 20 kHz square wave and applies WWVB-style amplitude
-          modulation so a nearby Wave Ceptor or Atomic watch can attempt a sync.
+          Preserves the validated WWVB speaker transmitter while establishing a
+          protocol-aware expansion path for future global radio time standards.
         </p>
-        <label class="monitor-toggle" for="monitorToggle">
-          <input id="monitorToggle" type="checkbox" />
-          <span class="monitor-toggle-ui">
-            <span class="monitor-toggle-label">Audible Monitor Tone</span>
-            <span class="monitor-toggle-note">Silent on low, F5 monitor beep on high, off by default</span>
-          </span>
-        </label>
+        <p id="supportBoundaryNote" class="support-note">
+          Stable today: WWVB-compatible watches. Other radio time standards are planned, not active yet.
+        </p>
+        <div class="mode-switch" role="radiogroup" aria-label="Output mode">
+          <label class="mode-option">
+            <input id="outputModeRadio" type="radio" name="outputMode" value="radio" checked />
+            <span class="mode-option-ui">
+              <span class="mode-option-title">Radio Reception Mode</span>
+              <span class="mode-option-note">Real WWVB transmission path for watch synchronization</span>
+            </span>
+          </label>
+          <label class="mode-option">
+            <input id="outputModeAudible" type="radio" name="outputMode" value="audible" />
+            <span class="mode-option-ui">
+              <span class="mode-option-title">Audible Monitor Tone Mode</span>
+              <span class="mode-option-note">Human-audible playback mode for hearing the signal pattern</span>
+            </span>
+          </label>
+        </div>
         <div class="button-row">
           <button id="startButton" class="button button-primary" type="button">
             Start Transmit
@@ -31,9 +43,38 @@
             Stop Transmit
           </button>
         </div>
+        <p id="transmitGuardNote" class="guard-note">
+          WWVB is the current stable transmission mode. Planned standards are shown for roadmap clarity only.
+        </p>
       </header>
 
       <main class="dashboard">
+        <section class="panel signal-panel">
+          <div class="panel-head">
+            <h2>Signal Mode</h2>
+            <span id="signalModeSummary" class="panel-note">WWVB 60 kHz selected · Stable</span>
+          </div>
+          <div class="signal-mode-layout">
+            <article class="signal-mode-card signal-mode-current">
+              <span class="stat-label">Current Signal</span>
+              <strong id="selectedSignalHeroValue" class="stat-value">WWVB 60 kHz</strong>
+              <span id="selectedSignalHeroMeta" class="stat-meta">North America · Stable · 60-bit WWVB frame</span>
+            </article>
+            <article class="signal-mode-card signal-mode-control">
+              <label class="signal-select-label" for="protocolSelect">Choose signal</label>
+              <select id="protocolSelect" class="signal-select" aria-label="Available signal modes"></select>
+              <span class="signal-select-note">Only WWVB is live in v0.3. Planned standards are listed for roadmap clarity.</span>
+            </article>
+            <article class="signal-mode-card">
+              <span class="stat-label">Compatibility</span>
+              <strong id="protocolCompatibilityValue" class="stat-value">WWVB-compatible watches</strong>
+              <span id="protocolCompatibilityMeta" class="stat-meta">
+                Only WWVB is transmissible in v0.3. Planned standards are listed so users can see the intended expansion path.
+              </span>
+            </article>
+          </div>
+        </section>
+
         <section class="panel status-panel">
           <div class="panel-head">
             <h2>Transmission Status</h2>
@@ -56,9 +97,24 @@
               <span id="pulseWidthValue" class="stat-meta">Pulse width: --</span>
             </article>
             <article class="stat-card">
+              <span class="stat-label">Selected Signal</span>
+              <strong id="selectedSignalValue" class="stat-value">WWVB 60 kHz</strong>
+              <span id="selectedSignalMeta" class="stat-meta">North America · 60-bit WWVB frame</span>
+            </article>
+            <article class="stat-card">
+              <span class="stat-label">Protocol Status</span>
+              <strong id="protocolStatusValue" class="stat-value">Stable</strong>
+              <span id="protocolStatusMeta" class="stat-meta">WWVB is the current validated transmission mode</span>
+            </article>
+            <article class="stat-card">
               <span class="stat-label">Carrier</span>
-              <strong class="stat-value">20 kHz Square</strong>
-              <span class="stat-meta">3rd harmonic target for near-field WWVB emulation</span>
+              <strong id="carrierValue" class="stat-value">20 kHz Square</strong>
+              <span id="carrierMeta" class="stat-meta">3rd harmonic target for near-field WWVB emulation</span>
+            </article>
+            <article class="stat-card">
+              <span class="stat-label">Carrier Strategy</span>
+              <strong id="carrierStrategyValue" class="stat-value">20 kHz Square</strong>
+              <span id="carrierStrategyMeta" class="stat-meta">3rd-harmonic near-field strategy for stable WWVB transmission</span>
             </article>
             <article class="stat-card">
               <span class="stat-label">Audio Engine</span>
@@ -66,9 +122,9 @@
               <span class="stat-meta">Web Audio graph start state</span>
             </article>
             <article class="stat-card">
-              <span class="stat-label">Monitor Tone</span>
-              <strong id="monitorStatusValue" class="stat-value">Disabled</strong>
-              <span id="monitorStatusMeta" class="stat-meta">Audible monitor is off</span>
+              <span class="stat-label">Output Mode</span>
+              <strong id="monitorStatusValue" class="stat-value">Radio</strong>
+              <span id="monitorStatusMeta" class="stat-meta">Radio reception mode is selected for real watch synchronization</span>
             </article>
           </div>
         </section>
@@ -120,7 +176,7 @@
           <div class="detail-list">
             <article class="detail-card">
               <h3>Signal Logic</h3>
-              <p>
+              <p id="signalLogicText">
                 Markers are emitted at seconds 0, 9, 19, 29, 39, 49, and 59.
                 Data pulses follow the NIST WWVB AM timing envelope.
               </p>

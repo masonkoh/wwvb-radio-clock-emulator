@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WWVB Radio Clock Emulator</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <div class="bg-grid" aria-hidden="true"></div>
+      <header class="hero panel">
+        <p class="eyebrow">60 kHz Longwave Clock Signal Emulator</p>
+        <h1>WWVB Speaker Transmitter</h1>
+        <p class="hero-copy">
+          Generates a 20 kHz square wave and applies WWVB-style amplitude
+          modulation so a nearby Wave Ceptor or Atomic watch can attempt a sync.
+        </p>
+        <label class="monitor-toggle" for="monitorToggle">
+          <input id="monitorToggle" type="checkbox" />
+          <span class="monitor-toggle-ui">
+            <span class="monitor-toggle-label">Audible Monitor Tone</span>
+            <span class="monitor-toggle-note">Silent on low, F5 monitor beep on high, off by default</span>
+          </span>
+        </label>
+        <div class="button-row">
+          <button id="startButton" class="button button-primary" type="button">
+            Start Transmit
+          </button>
+          <button id="stopButton" class="button button-secondary" type="button" disabled>
+            Stop Transmit
+          </button>
+        </div>
+      </header>
+
+      <main class="dashboard">
+        <section class="panel status-panel">
+          <div class="panel-head">
+            <h2>Transmission Status</h2>
+            <span id="statusBadge" class="badge badge-idle">Idle</span>
+          </div>
+          <div class="status-grid">
+            <article class="stat-card">
+              <span class="stat-label">Local Time</span>
+              <strong id="localTimeValue" class="stat-value">--:--:--</strong>
+              <span class="stat-meta">Current device time being mirrored in the UI</span>
+            </article>
+            <article class="stat-card">
+              <span class="stat-label">Frame Start (UTC)</span>
+              <strong id="frameTimeValue" class="stat-value">--</strong>
+              <span class="stat-meta">WWVB frame payload encoded from this minute boundary</span>
+            </article>
+            <article class="stat-card">
+              <span class="stat-label">Current Bit</span>
+              <strong id="currentBitValue" class="stat-value">--</strong>
+              <span id="pulseWidthValue" class="stat-meta">Pulse width: --</span>
+            </article>
+            <article class="stat-card">
+              <span class="stat-label">Carrier</span>
+              <strong class="stat-value">20 kHz Square</strong>
+              <span class="stat-meta">3rd harmonic target for near-field WWVB emulation</span>
+            </article>
+            <article class="stat-card">
+              <span class="stat-label">Audio Engine</span>
+              <strong id="audioEngineValue" class="stat-value">Standby</strong>
+              <span class="stat-meta">Web Audio graph start state</span>
+            </article>
+            <article class="stat-card">
+              <span class="stat-label">Monitor Tone</span>
+              <strong id="monitorStatusValue" class="stat-value">Disabled</strong>
+              <span id="monitorStatusMeta" class="stat-meta">Audible monitor is off</span>
+            </article>
+          </div>
+        </section>
+
+        <section class="panel timeline-panel">
+          <div class="panel-head">
+            <h2>60-Bit Frame</h2>
+            <span id="frameMinuteLabel" class="panel-note">Minute frame: --</span>
+          </div>
+          <div id="frameGrid" class="frame-grid" aria-label="WWVB frame bit timeline"></div>
+        </section>
+
+        <section class="panel graph-panel">
+          <div class="panel-head">
+            <h2>Live Signal Graph</h2>
+            <span id="graphStatusLabel" class="panel-note">Waiting for transmission</span>
+          </div>
+          <div class="graph-grid">
+            <article class="graph-card">
+              <div class="graph-copy">
+                <h3>Output Waveform</h3>
+                <p>Readable step waveform showing the current WWVB pulse structure.</p>
+              </div>
+              <canvas
+                id="waveformCanvas"
+                class="signal-canvas"
+                width="960"
+                height="220"
+                aria-label="Real-time waveform graph"
+              ></canvas>
+            </article>
+            <article class="graph-card">
+              <div class="graph-copy">
+                <h3>Current PWM Envelope</h3>
+                <p>One-second WWVB pulse profile for the active bit.</p>
+              </div>
+              <canvas
+                id="envelopeCanvas"
+                class="signal-canvas signal-canvas-envelope"
+                width="960"
+                height="180"
+                aria-label="Current PWM envelope graph"
+              ></canvas>
+            </article>
+          </div>
+        </section>
+
+        <section class="panel details-panel">
+          <div class="detail-list">
+            <article class="detail-card">
+              <h3>Signal Logic</h3>
+              <p>
+                Markers are emitted at seconds 0, 9, 19, 29, 39, 49, and 59.
+                Data pulses follow the NIST WWVB AM timing envelope.
+              </p>
+            </article>
+            <article class="detail-card">
+              <h3>Timing Engine</h3>
+              <p>
+                Audio is scheduled with <code>AudioContext.currentTime</code> and
+                gain automation only. No <code>setTimeout</code> or
+                <code>setInterval</code> is used for pulse timing.
+              </p>
+            </article>
+            <article class="detail-card">
+              <h3>Placement Tip</h3>
+              <p>
+                Put the watch as close as possible to the phone or laptop speaker
+                and keep the volume high but clean to maximize the local magnetic field.
+              </p>
+            </article>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="./app.js" defer></script>
+  </body>
+</html>
